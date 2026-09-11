@@ -85,6 +85,8 @@ package (e.g. pyim) issues the `require', so you cannot wrap it in a
 (declare-function liberime-get-input "ext:src/liberime-core.c")
 (declare-function liberime-get-schema-config "ext:src/liberime-core.c")
 (declare-function liberime-get-schema-list "ext:src/liberime-core.c")
+(declare-function liberime-get-option "ext:src/liberime-core.c")
+(declare-function liberime-set-option "ext:src/liberime-core.c")
 (declare-function liberime-get-status "ext:src/liberime-core.c")
 (declare-function liberime-get-sync-dir "ext:src/liberime-core.c")
 (declare-function liberime-get-user-config "ext:src/liberime-core.c")

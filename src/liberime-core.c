@@ -1308,10 +1308,11 @@ DOCSTRING(set_option, "OPTION VALUE &optional SESSION",
           "\"ascii_mode\", \"full_shape\", \"ascii_punct\" or\n"
           "\"extended_charset\"; any non-nil VALUE turns the option on. "
           "Returns\n"
-          "the state read back after setting, t or nil (nil for unknown "
-          "options).\n"
-          "With SESSION, operate on that session instead of the default "
-          "session.");
+          "the state read back after setting (librime creates unknown "
+          "options,\n"
+          "so the read-back reflects the value just set).  With SESSION, "
+          "operate\n"
+          "on that session instead of the default session.");
 static emacs_value set_option(emacs_env *env, ptrdiff_t nargs,
                               emacs_value args[], void *data) {
   EmacsRime *rime = (EmacsRime *)data;
