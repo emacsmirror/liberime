@@ -177,6 +177,26 @@ Rime 同步功能的其它信息可以参考：[[https://github.com/rime/home/wi
 调用方可以把 Rime 码递归展开为正则表达式。向后兼容：不传该参数时行为与
 旧版一致（返回候选文本列表）。
 
+** 选项（option）的读取与设置
+
+~liberime-get-option~ / ~liberime-set-option~ 是对 librime
+~RimeApi.get_option~ / ~set_option~ 的薄封装，可读写任意 rime 选项（不限
+于 ~liberime-get-status~ 返回的那几个固定布尔值）：
+
+- ~(liberime-get-option OPTION &optional SESSION)~ —— 返回选项的布尔状
+  态（~t~ / ~nil~），未知选项返回 ~nil~。常用选项：~simplification~（简
+  体输出）、~ascii_mode~、~full_shape~、~ascii_punct~、~extended_charset~
+  等。
+- ~(liberime-set-option OPTION VALUE &optional SESSION)~ —— ~VALUE~ 非
+  ~nil~ 为开、~nil~ 为关；返回设置后读回的状态（~t~ / ~nil~）。注意
+  librime 对未知选项会创建之，所以读回的就是刚设的值。
+
+#+begin_src emacs-lisp
+  (liberime-get-option "simplification")       ; => nil（默认繁体）
+  (liberime-set-option "simplification" t)     ; => t
+  (liberime-get-option "simplification")       ; => t
+#+end_src
+
 ** 多 session 与 SESSION 参数
 
 librime 原生支持多个相互独立的 session（各自持有 composition、候选和
@@ -192,7 +212,7 @@ schema）。liberime 现将其暴露给 Elisp：
 一致）：~liberime-search~（~SESSION~ 非 ~nil~ 时复用该 session 查询，不再
 创建/销毁临时 session）、~liberime-process-key~、~liberime-simulate-key-sequence~、
 ~liberime-process-event~、~liberime-get-context~、~liberime-get-status~、
-~liberime-get-commit~、~liberime-get-input~、~liberime-clear-composition~、
+~liberime-get-option~、~liberime-set-option~、~liberime-get-commit~、~liberime-get-input~、~liberime-clear-composition~、
 ~liberime-commit-composition~、~liberime-select-candidate~、
 ~liberime-get-candidates~。
 
