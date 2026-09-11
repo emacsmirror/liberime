@@ -550,10 +550,12 @@ always booleans."
     (liberime-test--restore-options)))
 
 (ert-deftest liberime-test-option-unknown-option ()
-  "Unknown options read as nil and set without error, reading back nil."
+  "Unknown options read as nil; setting one does not error and the value
+sticks (librime creates the option)."
   (liberime-test--skip-unless-rime)
   (should (eq (liberime-get-option "no_such_option") nil))
-  (should (eq (liberime-set-option "no_such_option" t) nil)))
+  (should (eq (liberime-set-option "no_such_option" t) t))
+  (should (eq (liberime-get-option "no_such_option") t)))
 
 (ert-deftest liberime-test-option-bogus-session-signals ()
   "A bogus SESSION signals a rime error, matching get_status."
