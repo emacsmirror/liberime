@@ -486,6 +486,82 @@ schema_access_time in the user config."
     (should (or (null commit) (stringp commit)))))
 
 ;; ---------------------------------------------------------------------------
+;; Option tests
+;; ---------------------------------------------------------------------------
+
+(defvar liberime-test--touched-options nil
+  "Options changed by the option tests, restored to off after each test.")
+
+(defun liberime-test--restore-options ()
+  "Reset every option touched by the option tests back to off."
+  (dolist (opt liberime-test--touched-options)
+    (ignore-errors (liberime-set-option opt nil)))
+  (setq liberime-test--touched-options nil))
+
+(ert-deftest liberime-test-get-option-default-and-boolean ()
+  "simplification defaults to off on the fresh test session; results are
+always booleans."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (add-to-list 'liberime-test--touched-options "simplification")
+        (liberime-set-option "simplification" nil)
+        (should (eq (liberime-get-option "simplification") nil))
+        (should (memq (liberime-get-option "ascii_mode") '(t nil))))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-set-option-toggles-and-reads-back ()
+  "set-option returns the read-back state; get-option reflects it."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (add-to-list 'liberime-test--touched-options "simplification")
+        (should (eq (liberime-set-option "simplification" t) t))
+        (should (eq (liberime-get-option "simplification") t))
+        (should (eq (liberime-set-option "simplification" nil) nil))
+        (should (eq (liberime-get-option "simplification") nil)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-set-option-any-option ()
+  "The option API is not limited to the get_status booleans."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (add-to-list 'liberime-test--touched-options "extended_charset")
+        (liberime-set-option "extended_charset" nil)
+        (should (eq (liberime-set-option "extended_charset" t) t))
+        (should (eq (liberime-get-option "extended_charset") t)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-option-session-isolation ()
+  "Setting an option on a created session leaves the default session alone."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (add-to-list 'liberime-test--touched-options "ascii_mode")
+        (liberime-set-option "ascii_mode" nil)
+        (let ((session (liberime-session-create "luna_pinyin")))
+          (unwind-protect
+              (progn
+                (should (eq (liberime-set-option "ascii_mode" t session) t))
+                (should (eq (liberime-get-option "ascii_mode" session) t))
+                (should (eq (liberime-get-option "ascii_mode") nil)))
+            (liberime-session-destroy session))))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-option-unknown-option ()
+  "Unknown options read as nil and set without error, reading back nil."
+  (liberime-test--skip-unless-rime)
+  (should (eq (liberime-get-option "no_such_option") nil))
+  (should (eq (liberime-set-option "no_such_option" t) nil)))
+
+(ert-deftest liberime-test-option-bogus-session-signals ()
+  "A bogus SESSION signals a rime error, matching get_status."
+  (liberime-test--skip-unless-rime)
+  (should-error (liberime-get-option "simplification" 999999))
+  (should-error (liberime-set-option "simplification" t 999999)))
+
+;; ---------------------------------------------------------------------------
 ;; Run tests
 ;; ---------------------------------------------------------------------------
 
