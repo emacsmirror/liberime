@@ -1275,6 +1275,63 @@ static emacs_value get_status(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
+DOCSTRING(get_option, "OPTION &optional SESSION",
+          "Get the boolean state of rime OPTION.\n"
+          "OPTION is a rime option name like \"simplification\", "
+          "\"ascii_mode\", \"full_shape\", \"ascii_punct\" or\n"
+          "\"extended_charset\".  Returns t when the option is on, nil "
+          "when it is\n"
+          "off or unknown.  With SESSION, operate on that session "
+          "instead of the\n"
+          "default session.");
+static emacs_value get_option(emacs_env *env, ptrdiff_t nargs,
+                              emacs_value args[], void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+
+  bool session_ok;
+  RimeSessionId session_id =
+      _resolve_session(env, rime, nargs >= 2 ? args[1] : em_nil, &session_ok);
+  if (!session_ok) {
+    return em_nil;
+  }
+
+  const char *option = em_get_string(env, args[0]);
+  Bool value = rime->api->get_option(session_id, option);
+  free((char *)option);
+
+  return value ? em_t : em_nil;
+}
+
+DOCSTRING(set_option, "OPTION VALUE &optional SESSION",
+          "Set rime OPTION to VALUE and return the resulting state.\n"
+          "OPTION is a rime option name like \"simplification\", "
+          "\"ascii_mode\", \"full_shape\", \"ascii_punct\" or\n"
+          "\"extended_charset\"; any non-nil VALUE turns the option on. "
+          "Returns\n"
+          "the state read back after setting, t or nil (nil for unknown "
+          "options).\n"
+          "With SESSION, operate on that session instead of the default "
+          "session.");
+static emacs_value set_option(emacs_env *env, ptrdiff_t nargs,
+                              emacs_value args[], void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+
+  bool session_ok;
+  RimeSessionId session_id =
+      _resolve_session(env, rime, nargs >= 3 ? args[2] : em_nil, &session_ok);
+  if (!session_ok) {
+    return em_nil;
+  }
+
+  const char *option = em_get_string(env, args[0]);
+  Bool value = env->is_not_nil(env, args[1]) ? True : False;
+  rime->api->set_option(session_id, option, value);
+  Bool result = rime->api->get_option(session_id, option);
+  free((char *)option);
+
+  return result ? em_t : em_nil;
+}
+
 DOCSTRING(get_user_config, "USER-CONFIG OPTION &optional RETURN-VALUE-TYPE",
           "Get OPTION of rime USER-CONFIG.\n"
           "The return value type can be set with RETURN-VALUE-TYPE.");
@@ -1641,6 +1698,8 @@ void liberime_init(emacs_env *env) {
 
   // status
   DEFUN("liberime-get-status", get_status, 0, 1);
+  DEFUN("liberime-get-option", get_option, 1, 2);
+  DEFUN("liberime-set-option", set_option, 2, 3);
 
   // sync
   DEFUN("liberime-get-sync-dir", get_sync_dir, 0, 0);
