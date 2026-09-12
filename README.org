@@ -203,6 +203,16 @@ Rime 同步功能的其它信息可以参考：[[https://github.com/rime/home/wi
   (liberime-get-state-label "simplification" t)   ; => "汉字"
 #+end_src
 
+** 交互式切换选项
+
+~M-x liberime-select-option-interactive~ 列出 ~liberime-options~ 中配置的
+选项，每项显示为 ~选项 当前 -> 目标~（文案实时读取自当前 schema，经
+~liberime-get-state-label~；schema 未定义该开关时回退为 ~off~/~on~），选
+择后翻转该项并回显变化。候选选项名由 ~liberime-options~ 配置（默认
+simplification、ascii_mode、full_shape、ascii_punct、
+extended_charset）——librime 无法枚举开关，故选项名是调用方配置，文案
+则由 schema 决定。
+
 ** 多 session 与 SESSION 参数
 
 librime 原生支持多个相互独立的 session（各自持有 composition、候选和
