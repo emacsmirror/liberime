@@ -575,6 +575,36 @@ sticks (librime creates the option)."
   (should-error (liberime-set-option "simplification" t 999999)))
 
 ;; ---------------------------------------------------------------------------
+;; State label tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest liberime-test-get-state-label-simplification ()
+  "get-state-label returns the schema's own labels for a switch's states,
+and the two states differ."
+  (liberime-test--skip-unless-rime)
+  (let ((off (liberime-get-state-label "simplification" nil))
+        (on (liberime-get-state-label "simplification" t)))
+    (should (stringp off))
+    (should (stringp on))
+    (should (not (string= off on)))))
+
+(ert-deftest liberime-test-get-state-label-schema-without-switch ()
+  "A schema that does not define the switch yields a nil label."
+  (liberime-test--skip-unless-rime)
+  ;; luna_pinyin defines no extended_charset switch
+  (should (eq (liberime-get-state-label "extended_charset" t) nil)))
+
+(ert-deftest liberime-test-get-state-label-unknown-option ()
+  "Unknown option names yield nil, no error."
+  (liberime-test--skip-unless-rime)
+  (should (eq (liberime-get-state-label "no_such_option" t) nil)))
+
+(ert-deftest liberime-test-get-state-label-bogus-session-signals ()
+  "A bogus SESSION signals a rime error, matching get_option."
+  (liberime-test--skip-unless-rime)
+  (should-error (liberime-get-state-label "simplification" nil 999999)))
+
+;; ---------------------------------------------------------------------------
 ;; Run tests
 ;; ---------------------------------------------------------------------------
 
