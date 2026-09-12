@@ -32,6 +32,17 @@
   :group 'liberime
   :type 'hook)
 
+(defcustom liberime-options
+  '("simplification" "ascii_mode" "full_shape" "ascii_punct"
+    "extended_charset")
+  "Rime options offered by \\=`liberime-select-option-interactive'.
+Each entry is a rime option name (string).  Display labels are read
+live from the active schema via \\=`liberime-get-state-label', so only
+the option names are configured here — librime has no API to enumerate
+switches, so this list is the caller's policy."
+  :group 'liberime
+  :type '(repeat string))
+
 (defcustom liberime-module-file nil
   "Liberime module file on the system.
 When it is nil, librime will auto search module in many path."
@@ -479,6 +490,36 @@ you only need to do this once."
                (schema (alist-get schema-name schema-list nil nil #'equal)))
           (liberime-try-select-schema schema))
       (message "Liberime: no schema has been found, ignore."))))
+
+;;;###autoload
+(defun liberime-select-option-interactive ()
+  "Select and toggle a rime option interactively.
+Offers each option in `liberime-options' as \"OPTION CURRENT ->
+TARGET\", with labels read live from the active schema via
+`liberime-get-state-label' (falling back to \"on\"/\"off\" when the
+schema defines no such switch).  Flips the selected option via
+`liberime-set-option' and echoes the transition."
+  (interactive)
+  (unless (fboundp 'liberime-get-option)
+    (user-error "Liberime: option API not available (needs liberime > 0.0.11)"))
+  (let* ((entries
+          (mapcar (lambda (name)
+                    (let* ((state (liberime-get-option name))
+                           (off (or (liberime-get-state-label name nil)
+                                    "off"))
+                           (on (or (liberime-get-state-label name t)
+                                   "on"))
+                           (current (if state on off))
+                           (target (if state off on)))
+                      (cons (format "%s %s -> %s" name current target)
+                            (list name state))))
+                  liberime-options))
+         (choice (completing-read "Rime option: " entries nil t))
+         (entry (assoc choice entries)))
+    (when entry
+      (pcase-let ((`(,name ,state) (cdr entry)))
+        (liberime-set-option name (not state))
+        (message "%s" (car entry))))))
 
 ;;;###autoload
 (defun liberime-sync ()
