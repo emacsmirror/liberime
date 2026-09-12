@@ -535,6 +535,7 @@ selecting activates the next option and deactivates the others
                  (liberime-set-option opt (equal opt arg2)))))
             (message "%s" choice)))))))
 
+;;;###autoload
 (defun liberime-sync ()
   "Sync rime user data.
 User should specify sync_dir in installation.yaml file of
