@@ -205,7 +205,7 @@ Rime 同步功能的其它信息可以参考：[[https://github.com/rime/home/wi
 
 ** 交互式切换选项
 
-~M-x liberime-select-option-interactive~ 列出 ~liberime-options~ 中配置的
+~M-x liberime-option-menu~ 列出 ~liberime-options~ 中配置的
 选项，每项显示为 ~选项 当前 -> 目标~（文案实时读取自当前 schema，经
 ~liberime-get-state-label~；schema 未定义该开关时回退为 ~off~/~on~），选
 择后翻转该项并回显变化。候选选项名由 ~liberime-options~ 配置（默认

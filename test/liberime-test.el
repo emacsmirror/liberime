@@ -613,11 +613,11 @@ and the two states differ."
 ;; Interactive option switcher tests
 ;; ---------------------------------------------------------------------------
 
-(ert-deftest liberime-test-select-option-interactive-is-command ()
-  "liberime-select-option-interactive is an interactive command."
-  (should (commandp 'liberime-select-option-interactive)))
+(ert-deftest liberime-test-option-menu-is-command ()
+  "liberime-option-menu is an interactive command."
+  (should (commandp 'liberime-option-menu)))
 
-(ert-deftest liberime-test-select-option-interactive-labels-live ()
+(ert-deftest liberime-test-option-menu-labels-live ()
   "Candidates use the schema's own labels, off/on only as fallback."
   (liberime-test--skip-unless-rime)
   (let ((candidates
@@ -625,7 +625,7 @@ and the two states differ."
            (cl-letf (((symbol-function 'completing-read)
                       (lambda (_p collection &rest _)
                         (throw 'coll collection))))
-             (liberime-select-option-interactive)
+             (liberime-option-menu)
              nil))))
     ;; simplification has schema labels (漢字/汉字 under luna_pinyin)
     (should (cl-some (lambda (c)
@@ -638,7 +638,7 @@ and the two states differ."
     ;; one candidate per configured option
     (should (= (length candidates) (length liberime-options)))))
 
-(ert-deftest liberime-test-select-option-interactive-toggles ()
+(ert-deftest liberime-test-option-menu-toggles ()
   "Selecting an option flips it via set-option and echoes the transition."
   (liberime-test--skip-unless-rime)
   (liberime-test--save-option "simplification")
@@ -653,7 +653,7 @@ and the two states differ."
                     ((symbol-function 'message)
                      (lambda (fmt &rest args)
                        (setq echoed (apply #'format fmt args)))))
-            (liberime-select-option-interactive))
+            (liberime-option-menu))
           (should (eq (liberime-get-option "simplification") t))
           (should (string-prefix-p "simplification " echoed))))
     (liberime-test--restore-options)))

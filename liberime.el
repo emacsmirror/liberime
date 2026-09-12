@@ -35,7 +35,7 @@
 (defcustom liberime-options
   '("simplification" "ascii_mode" "full_shape" "ascii_punct"
     "extended_charset")
-  "Rime options offered by `liberime-select-option-interactive'.
+  "Rime options offered by `liberime-option-menu'.
 Each entry is a rime option name (string).  Display labels are read
 live from the active schema via `liberime-get-state-label', so only
 the option names are configured here — librime has no API to enumerate
@@ -492,7 +492,7 @@ you only need to do this once."
       (message "Liberime: no schema has been found, ignore."))))
 
 ;;;###autoload
-(defun liberime-select-option-interactive ()
+(defun liberime-option-menu ()
   "Select and toggle a rime option interactively.
 Offers each option in `liberime-options' as \"OPTION CURRENT ->
 TARGET\", with labels read live from the active schema via
