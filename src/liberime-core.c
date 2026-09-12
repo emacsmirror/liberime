@@ -1334,6 +1334,169 @@ static emacs_value get_state_label(emacs_env *env, ptrdiff_t nargs,
   return result;
 }
 
+DOCSTRING(get_switches, "&optional SCHEMA",
+          "List the switches defined by SCHEMA's (default: active) config.\n"
+          "Returns one entry per switch: (NAME STATES RESET OPTIONS).\n"
+          "NAME is the option name for a toggle switch, or the first option\n"
+          "of a radio group.  STATES is the list of display labels\n"
+          "(states[i] labels entry i), or nil when the switch defines none.\n"
+          "RESET is the initial state index from the schema, or nil.\n"
+          "OPTIONS is the list of option names for a radio group\n"
+          "(mutually exclusive), or nil for a plain toggle.  Labels and the\n"
+          "switch list are fully schema-driven.");
+static emacs_value get_switches(emacs_env *env, ptrdiff_t nargs,
+                                emacs_value args[], void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+
+  if (!_ensure_session(rime)) {
+    em_signal_rimeerr(env, 1, NO_SESSION_ERR);
+    return em_nil;
+  }
+
+  const int max_schema_length = 0xff;
+  char *schema_id = (char *)malloc(max_schema_length * sizeof(char));
+  memset(schema_id, 0, max_schema_length);
+  if (nargs >= 1 && env->is_not_nil(env, args[0])) {
+    char *arg0 = em_get_string(env, args[0]);
+    if (arg0 == NULL || strlen(arg0) == 0 ||
+        strlen(arg0) > max_schema_length - 1) {
+      em_signal_rimeerr(env, 2, "Invalid schema id.");
+      free(arg0);
+      free(schema_id);
+      return em_nil;
+    }
+    strcpy(schema_id, arg0);
+    free(arg0);
+  } else if (!rime->api->get_current_schema(rime->session_id, schema_id,
+                                            max_schema_length)) {
+    em_signal_rimeerr(env, 2, "Error get current schema.");
+    free(schema_id);
+    return em_nil;
+  }
+
+  RimeConfig *config = (RimeConfig *)malloc(sizeof(RimeConfig));
+  if (!rime->api->schema_open(schema_id, config)) {
+    free(schema_id);
+    free(config);
+    em_signal_rimeerr(env, 2, "Failed to open schema config file.");
+    return em_nil;
+  }
+  free(schema_id);
+
+  size_t cap = 8, count = 0;
+  emacs_value *entries = (emacs_value *)malloc(cap * sizeof(emacs_value));
+
+  RimeConfigIterator it;
+  if (rime->api->config_begin_list(&it, config, "switches")) {
+    do {
+      char path[512];
+      // Toggle switches define "name"; radio groups define "options".
+      snprintf(path, sizeof(path), "%s/name", it.path);
+      const char *name = rime->api->config_get_cstring(config, path);
+
+      emacs_value options = em_nil;
+      const char *first_option = NULL;
+      {
+        snprintf(path, sizeof(path), "%s/options", it.path);
+        RimeConfigIterator oit;
+        if (rime->api->config_begin_list(&oit, config, path)) {
+          size_t ocap = 8, ocount = 0;
+          emacs_value *opts =
+              (emacs_value *)malloc(ocap * sizeof(emacs_value));
+          do {
+            const char *opt = rime->api->config_get_cstring(config, oit.path);
+            if (opt) {
+              if (!first_option) {
+                first_option = opt;
+              }
+              if (ocount == ocap) {
+                ocap *= 2;
+                opts = (emacs_value *)realloc(
+                    opts, ocap * sizeof(emacs_value));
+              }
+              opts[ocount++] =
+                  env->make_string(env, opt, strlen(opt));
+            }
+          } while (rime->api->config_next(&oit));
+          rime->api->config_end(&oit);
+          if (ocount > 0) {
+            options = em_list(env, (ptrdiff_t)ocount, opts);
+          }
+          free(opts);
+        }
+      }
+
+      if (name == NULL && options == em_nil) {
+        continue;  // malformed switch entry, skip
+      }
+      emacs_value name_value =
+          name ? env->make_string(env, name, strlen(name))
+               : /* radio group: NAME is the first option */
+               (first_option
+                    ? env->make_string(env, first_option,
+                                       strlen(first_option))
+                    : em_nil);
+
+      emacs_value states = em_nil;
+      {
+        snprintf(path, sizeof(path), "%s/states", it.path);
+        RimeConfigIterator sit;
+        if (rime->api->config_begin_list(&sit, config, path)) {
+          size_t scap = 8, scount = 0;
+          emacs_value *labels =
+              (emacs_value *)malloc(scap * sizeof(emacs_value));
+          do {
+            const char *label =
+                rime->api->config_get_cstring(config, sit.path);
+            if (label) {
+              if (scount == scap) {
+                scap *= 2;
+                labels = (emacs_value *)realloc(
+                    labels, scap * sizeof(emacs_value));
+              }
+              labels[scount++] =
+                  env->make_string(env, label, strlen(label));
+            }
+          } while (rime->api->config_next(&sit));
+          rime->api->config_end(&sit);
+          if (scount > 0) {
+            states = em_list(env, (ptrdiff_t)scount, labels);
+          }
+          free(labels);
+        }
+      }
+
+      emacs_value reset = em_nil;
+      {
+        int reset_value;
+        snprintf(path, sizeof(path), "%s/reset", it.path);
+        if (rime->api->config_get_int(config, path, &reset_value)) {
+          reset = env->make_integer(env, reset_value);
+        }
+      }
+
+      emacs_value entry =
+          em_cons(env, name_value,
+                  em_cons(env, states, em_cons(env, reset,
+                                               em_cons(env, options, em_nil))));
+      if (count == cap) {
+        cap *= 2;
+        entries =
+            (emacs_value *)realloc(entries, cap * sizeof(emacs_value));
+      }
+      entries[count++] = entry;
+    } while (rime->api->config_next(&it));
+    rime->api->config_end(&it);
+  }
+
+  rime->api->config_close(config);
+  free(config);
+
+  emacs_value result = em_list(env, (ptrdiff_t)count, entries);
+  free(entries);
+  return result;
+}
+
 DOCSTRING(set_option, "OPTION VALUE &optional SESSION",
           "Set rime OPTION to VALUE and return the resulting state.\n"
           "OPTION is a rime option name like \"simplification\", "
@@ -1734,6 +1897,7 @@ void liberime_init(emacs_env *env) {
   DEFUN("liberime-get-option", get_option, 1, 2);
   DEFUN("liberime-set-option", set_option, 2, 3);
   DEFUN("liberime-get-state-label", get_state_label, 2, 3);
+  DEFUN("liberime-get-switches", get_switches, 0, 1);
 
   // sync
   DEFUN("liberime-get-sync-dir", get_sync_dir, 0, 0);

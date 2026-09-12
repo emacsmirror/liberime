@@ -610,6 +610,40 @@ and the two states differ."
   (should-error (liberime-get-state-label "simplification" nil 999999)))
 
 ;; ---------------------------------------------------------------------------
+;; Switch enumeration tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest liberime-test-get-switches-lists-schema-switches ()
+  "get-switches enumerates the switches defined by the active schema."
+  (liberime-test--skip-unless-rime)
+  (let ((switches (liberime-get-switches)))
+    (should (listp switches))
+    (should (> (length switches) 0))
+    ;; luna_pinyin defines a simplification toggle with 漢字/汉字 labels.
+    (let ((entry (cl-find "simplification" switches
+                          :key #'car :test #'equal)))
+      (should entry)
+      (pcase-let ((`(,name ,states ,_reset ,options) entry))
+        (should (equal name "simplification"))
+        (should (equal states '("漢字" "汉字")))
+        (should (null options))))
+    ;; Every entry has the (NAME STATES RESET OPTIONS) shape.
+    (dolist (sw switches)
+      (should (= (length sw) 4)))))
+
+(ert-deftest liberime-test-get-switches-explicit-schema ()
+  "An explicit SCHEMA argument is honored."
+  (liberime-test--skip-unless-rime)
+  (let ((switches (liberime-get-switches "luna_pinyin")))
+    (should (cl-find "simplification" switches
+                     :key #'car :test #'equal))))
+
+(ert-deftest liberime-test-get-switches-unknown-schema-yields-nil ()
+  "A schema without a config (unknown id) yields nil, no error."
+  (liberime-test--skip-unless-rime)
+  (should (eq (liberime-get-switches "no_such_schema_xyz") nil)))
+
+;; ---------------------------------------------------------------------------
 ;; Interactive option switcher tests
 ;; ---------------------------------------------------------------------------
 
@@ -618,7 +652,7 @@ and the two states differ."
   (should (commandp 'liberime-option-menu)))
 
 (ert-deftest liberime-test-option-menu-labels-live ()
-  "Candidates use the schema's own labels, off/on only as fallback."
+  "Candidates are the schema's own switches with schema labels."
   (liberime-test--skip-unless-rime)
   (let ((candidates
          (catch 'coll
@@ -633,10 +667,13 @@ and the two states differ."
                             (not (string-match-p "off -> on\\|on -> off"
                                                  (car c)))))
                      candidates))
-    ;; extended_charset has no switch under luna_pinyin -> off/on fallback
-    (should (assoc "extended_charset off -> on" candidates))
-    ;; one candidate per configured option
-    (should (= (length candidates) (length liberime-options)))))
+    ;; Options without a switch in the schema are not offered at all.
+    (should-not (cl-some (lambda (c)
+                           (string-prefix-p "extended_charset" (car c)))
+                         candidates))
+    ;; one candidate per schema-defined switch
+    (should (= (length candidates)
+               (length (liberime-get-switches))))))
 
 (ert-deftest liberime-test-option-menu-toggles ()
   "Selecting an option flips it via set-option and echoes the transition."

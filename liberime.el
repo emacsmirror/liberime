@@ -32,16 +32,6 @@
   :group 'liberime
   :type 'hook)
 
-(defcustom liberime-options
-  '("simplification" "ascii_mode" "full_shape" "ascii_punct"
-    "extended_charset")
-  "Rime options offered by `liberime-option-menu'.
-Each entry is a rime option name (string).  Display labels are read
-live from the active schema via `liberime-get-state-label', so only
-the option names are configured here — librime has no API to enumerate
-switches, so this list is the caller's policy."
-  :group 'liberime
-  :type '(repeat string))
 
 (defcustom liberime-module-file nil
   "Liberime module file on the system.
@@ -99,6 +89,7 @@ package (e.g. pyim) issues the `require', so you cannot wrap it in a
 (declare-function liberime-get-option "ext:src/liberime-core.c")
 (declare-function liberime-set-option "ext:src/liberime-core.c")
 (declare-function liberime-get-state-label "ext:src/liberime-core.c")
+(declare-function liberime-get-switches "ext:src/liberime-core.c")
 (declare-function liberime-get-status "ext:src/liberime-core.c")
 (declare-function liberime-get-sync-dir "ext:src/liberime-core.c")
 (declare-function liberime-get-user-config "ext:src/liberime-core.c")
@@ -493,35 +484,57 @@ you only need to do this once."
 
 ;;;###autoload
 (defun liberime-option-menu ()
-  "Select and toggle a rime option interactively.
-Offers each option in `liberime-options' as \"OPTION CURRENT ->
-TARGET\", with labels read live from the active schema via
-`liberime-get-state-label' (falling back to \"on\"/\"off\" when the
-schema defines no such switch).  Flips the selected option via
-`liberime-set-option' and echoes the transition."
+  "Select and toggle a rime switch interactively.
+Switches are enumerated from the active schema's config via
+`liberime-get-switches', so only switches the schema actually
+defines are offered, with the schema's own state labels.  Each
+candidate is shown as \"OPTION CURRENT -> TARGET\".  For toggle
+switches selecting flips the option; for radio-group switches
+selecting activates the next option and deactivates the others
+(mirroring librime's own cycle behavior)."
   (interactive)
-  (unless (fboundp 'liberime-get-option)
-    (user-error "Liberime: option API not available (needs liberime > 0.0.11)"))
-  (let* ((entries
-          (mapcar (lambda (name)
-                    (let* ((state (liberime-get-option name))
-                           (off (or (liberime-get-state-label name nil)
-                                    "off"))
-                           (on (or (liberime-get-state-label name t)
-                                   "on"))
-                           (current (if state on off))
-                           (target (if state off on)))
-                      (cons (format "%s %s -> %s" name current target)
-                            (list name state))))
-                  liberime-options))
-         (choice (completing-read "Rime option: " entries nil t))
-         (entry (assoc choice entries)))
-    (when entry
-      (pcase-let ((`(,name ,state) (cdr entry)))
-        (liberime-set-option name (not state))
-        (message "%s" (car entry))))))
+  (unless (fboundp 'liberime-get-switches)
+    (user-error "Liberime: switch API not available (needs liberime > 0.0.11)"))
+  (let ((entries nil))
+    (dolist (sw (liberime-get-switches))
+      (pcase-let ((`(,name ,states ,_reset ,options) sw))
+        (if options
+            ;; Radio group: offer cycling to the next option.
+            (let* ((len (length options))
+                   (cur-idx (or (cl-position-if #'liberime-get-option options)
+                                0))
+                   (nxt-idx (% (1+ cur-idx) len))
+                   (label (lambda (i)
+                            (or (nth i states) (nth i options)))))
+              (push (cons (format "%s %s -> %s"
+                                  (nth cur-idx options)
+                                  (funcall label cur-idx)
+                                  (funcall label nxt-idx))
+                          (list :radio options (nth nxt-idx options)))
+                    entries))
+          ;; Plain toggle switch.
+          (let* ((state (liberime-get-option name))
+                 (off-label (or (nth 0 states) "off"))
+                 (on-label (or (nth 1 states) "on"))
+                 (current (if state on-label off-label))
+                 (target (if state off-label on-label)))
+            (push (cons (format "%s %s -> %s" name current target)
+                        (list :toggle name (not state)))
+                  entries)))))
+    (setq entries (nreverse entries))
+    (if (null entries)
+        (user-error "Liberime: no switches defined in the active schema")
+      (let* ((choice (completing-read "Rime option: " entries nil t))
+             (entry (assoc choice entries)))
+        (when entry
+          (pcase-let ((`(,kind ,arg1 ,arg2) (cdr entry)))
+            (pcase kind
+              (:toggle (liberime-set-option arg1 arg2))
+              (:radio
+               (dolist (opt arg1)
+                 (liberime-set-option opt (equal opt arg2)))))
+            (message "%s" choice)))))))
 
-;;;###autoload
 (defun liberime-sync ()
   "Sync rime user data.
 User should specify sync_dir in installation.yaml file of
