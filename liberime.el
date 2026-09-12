@@ -35,9 +35,9 @@
 (defcustom liberime-options
   '("simplification" "ascii_mode" "full_shape" "ascii_punct"
     "extended_charset")
-  "Rime options offered by \\=`liberime-select-option-interactive'.
+  "Rime options offered by `liberime-select-option-interactive'.
 Each entry is a rime option name (string).  Display labels are read
-live from the active schema via \\=`liberime-get-state-label', so only
+live from the active schema via `liberime-get-state-label', so only
 the option names are configured here — librime has no API to enumerate
 switches, so this list is the caller's policy."
   :group 'liberime

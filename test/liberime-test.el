@@ -53,11 +53,16 @@ Creates a temporary user data directory."
             (ignore-errors
               (liberime-start liberime-test--shared-dir
                               liberime-test--user-dir)))
-      ;; Select a schema for testing
+      ;; Select a schema for testing (prefer luna_pinyin for
+      ;; deterministic labels; fall back to the first available)
       (when liberime-test--session-id
-        (let ((schemas (liberime-get-schema-list)))
-          (when schemas
-            (liberime-select-schema (caar schemas))))))))
+        (let* ((schemas (liberime-get-schema-list))
+               (ids (mapcar #'car schemas))
+               (schema (if (member "luna_pinyin" ids)
+                           "luna_pinyin"
+                         (caar schemas))))
+          (when schema
+            (liberime-select-schema schema)))))))
 
 (defun liberime-test--teardown ()
   "Finalize librime and clean up."
