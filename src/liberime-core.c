@@ -1302,6 +1302,38 @@ static emacs_value get_option(emacs_env *env, ptrdiff_t nargs,
   return value ? em_t : em_nil;
 }
 
+DOCSTRING(get_state_label, "OPTION STATE &optional SESSION",
+          "Get the active schema's display label for rime OPTION in "
+          "STATE.\n"
+          "OPTION is a rime option name like \"simplification\"; STATE "
+          "non-nil\n"
+          "selects the on-label, nil the off-label.  Returns the label "
+          "string,\n"
+          "or nil when the schema defines no such switch (labels are "
+          "schema-driven).\n"
+          "With SESSION, operate on that session instead of the default "
+          "session.");
+static emacs_value get_state_label(emacs_env *env, ptrdiff_t nargs,
+                                   emacs_value args[], void *data) {
+  EmacsRime *rime = (EmacsRime *)data;
+
+  bool session_ok;
+  RimeSessionId session_id =
+      _resolve_session(env, rime, nargs >= 3 ? args[2] : em_nil, &session_ok);
+  if (!session_ok) {
+    return em_nil;
+  }
+
+  const char *option = em_get_string(env, args[0]);
+  Bool state = env->is_not_nil(env, args[1]) ? True : False;
+  const char *label = rime->api->get_state_label(session_id, option, state);
+  emacs_value result =
+      label ? env->make_string(env, label, strlen(label)) : em_nil;
+  free((char *)option);
+
+  return result;
+}
+
 DOCSTRING(set_option, "OPTION VALUE &optional SESSION",
           "Set rime OPTION to VALUE and return the resulting state.\n"
           "OPTION is a rime option name like \"simplification\", "
@@ -1701,6 +1733,7 @@ void liberime_init(emacs_env *env) {
   DEFUN("liberime-get-status", get_status, 0, 1);
   DEFUN("liberime-get-option", get_option, 1, 2);
   DEFUN("liberime-set-option", set_option, 2, 3);
+  DEFUN("liberime-get-state-label", get_state_label, 2, 3);
 
   // sync
   DEFUN("liberime-get-sync-dir", get_sync_dir, 0, 0);

@@ -190,11 +190,17 @@ Rime 同步功能的其它信息可以参考：[[https://github.com/rime/home/wi
 - ~(liberime-set-option OPTION VALUE &optional SESSION)~ —— ~VALUE~ 非
   ~nil~ 为开、~nil~ 为关；返回设置后读回的状态（~t~ / ~nil~）。注意
   librime 对未知选项会创建之，所以读回的就是刚设的值。
+- ~(liberime-get-state-label OPTION STATE &optional SESSION)~ —— 返回当前
+  schema 为该选项的 ~STATE~（非 ~nil~ = 开）配置的显示文案（如
+  ~simplification~ 的开/关分别为「汉字」/「漢字」）；schema 未定义该开
+  关时返回 ~nil~。文案完全由 schema 决定，无需在 Elisp 侧硬编码。
 
 #+begin_src emacs-lisp
   (liberime-get-option "simplification")       ; => nil（默认繁体）
   (liberime-set-option "simplification" t)     ; => t
   (liberime-get-option "simplification")       ; => t
+  (liberime-get-state-label "simplification" nil) ; => "漢字"
+  (liberime-get-state-label "simplification" t)   ; => "汉字"
 #+end_src
 
 ** 多 session 与 SESSION 参数
