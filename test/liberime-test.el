@@ -53,11 +53,16 @@ Creates a temporary user data directory."
             (ignore-errors
               (liberime-start liberime-test--shared-dir
                               liberime-test--user-dir)))
-      ;; Select a schema for testing
+      ;; Select a schema for testing (prefer luna_pinyin for
+      ;; deterministic labels; fall back to the first available)
       (when liberime-test--session-id
-        (let ((schemas (liberime-get-schema-list)))
-          (when schemas
-            (liberime-select-schema (caar schemas))))))))
+        (let* ((schemas (liberime-get-schema-list))
+               (ids (mapcar #'car schemas))
+               (schema (if (member "luna_pinyin" ids)
+                           "luna_pinyin"
+                         (caar schemas))))
+          (when schema
+            (liberime-select-schema schema)))))))
 
 (defun liberime-test--teardown ()
   "Finalize librime and clean up."
@@ -484,6 +489,211 @@ schema_access_time in the user config."
   (let ((commit (liberime-get-commit)))
     ;; Commit may be nil or a string depending on state
     (should (or (null commit) (stringp commit)))))
+
+;; ---------------------------------------------------------------------------
+;; Option tests
+;; ---------------------------------------------------------------------------
+
+(defvar liberime-test--saved-options nil
+  "Alist of (OPTION . VALUE) snapshots to restore after each option test.")
+
+(defun liberime-test--save-option (option)
+  "Snapshot OPTION's current state so it is restored after the test."
+  (push (cons option (liberime-get-option option))
+        liberime-test--saved-options))
+
+(defun liberime-test--restore-options ()
+  "Restore every option snapshotted by `liberime-test--save-option'."
+  (dolist (saved liberime-test--saved-options)
+    (ignore-errors (liberime-set-option (car saved) (cdr saved))))
+  (setq liberime-test--saved-options nil))
+
+(ert-deftest liberime-test-get-option-default-and-boolean ()
+  "simplification defaults to off on the fresh test session; results are
+always booleans."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (liberime-test--save-option "simplification")
+        (liberime-set-option "simplification" nil)
+        (should (eq (liberime-get-option "simplification") nil))
+        (liberime-test--save-option "ascii_mode")
+        (liberime-set-option "ascii_mode" t)
+        (should (eq (liberime-get-option "ascii_mode") t)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-set-option-toggles-and-reads-back ()
+  "set-option returns the read-back state; get-option reflects it."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (liberime-test--save-option "simplification")
+        (should (eq (liberime-set-option "simplification" t) t))
+        (should (eq (liberime-get-option "simplification") t))
+        (should (eq (liberime-set-option "simplification" nil) nil))
+        (should (eq (liberime-get-option "simplification") nil)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-set-option-any-option ()
+  "The option API is not limited to the get_status booleans."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (liberime-test--save-option "extended_charset")
+        (liberime-set-option "extended_charset" nil)
+        (should (eq (liberime-set-option "extended_charset" t) t))
+        (should (eq (liberime-get-option "extended_charset") t)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-option-session-isolation ()
+  "Setting an option on a created session leaves the default session alone."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (liberime-test--save-option "ascii_mode")
+        (liberime-set-option "ascii_mode" nil)
+        (let ((session (liberime-session-create "luna_pinyin")))
+          (unwind-protect
+              (progn
+                (should (eq (liberime-set-option "ascii_mode" t session) t))
+                (should (eq (liberime-get-option "ascii_mode" session) t))
+                (should (eq (liberime-get-option "ascii_mode") nil)))
+            (liberime-session-destroy session))))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-option-unknown-option ()
+  "Unknown options read as nil; setting one does not error and the value
+sticks (librime creates the option)."
+  (liberime-test--skip-unless-rime)
+  (unwind-protect
+      (progn
+        (liberime-test--save-option "no_such_option")
+        (should (eq (liberime-get-option "no_such_option") nil))
+        (should (eq (liberime-set-option "no_such_option" t) t))
+        (should (eq (liberime-get-option "no_such_option") t)))
+    (liberime-test--restore-options)))
+
+(ert-deftest liberime-test-option-bogus-session-signals ()
+  "A bogus SESSION signals a rime error, matching get_status."
+  (liberime-test--skip-unless-rime)
+  (should-error (liberime-get-option "simplification" 999999))
+  (should-error (liberime-set-option "simplification" t 999999)))
+
+;; ---------------------------------------------------------------------------
+;; State label tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest liberime-test-get-state-label-simplification ()
+  "get-state-label returns the schema's own labels for a switch's states,
+and the two states differ."
+  (liberime-test--skip-unless-rime)
+  (let ((off (liberime-get-state-label "simplification" nil))
+        (on (liberime-get-state-label "simplification" t)))
+    (should (stringp off))
+    (should (stringp on))
+    (should (not (string= off on)))))
+
+(ert-deftest liberime-test-get-state-label-schema-without-switch ()
+  "A schema that does not define the switch yields a nil label."
+  (liberime-test--skip-unless-rime)
+  ;; luna_pinyin defines no extended_charset switch
+  (should (eq (liberime-get-state-label "extended_charset" t) nil)))
+
+(ert-deftest liberime-test-get-state-label-unknown-option ()
+  "Unknown option names yield nil, no error."
+  (liberime-test--skip-unless-rime)
+  (should (eq (liberime-get-state-label "no_such_option" t) nil)))
+
+(ert-deftest liberime-test-get-state-label-bogus-session-signals ()
+  "A bogus SESSION signals a rime error, matching get_option."
+  (liberime-test--skip-unless-rime)
+  (should-error (liberime-get-state-label "simplification" nil 999999)))
+
+;; ---------------------------------------------------------------------------
+;; Switch enumeration tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest liberime-test-get-switches-lists-schema-switches ()
+  "get-switches enumerates the switches defined by the active schema."
+  (liberime-test--skip-unless-rime)
+  (let ((switches (liberime-get-switches)))
+    (should (listp switches))
+    (should (> (length switches) 0))
+    ;; luna_pinyin defines a simplification toggle with 漢字/汉字 labels.
+    (let ((entry (cl-find "simplification" switches
+                          :key #'car :test #'equal)))
+      (should entry)
+      (pcase-let ((`(,name ,states ,_reset ,options) entry))
+        (should (equal name "simplification"))
+        (should (equal states '("漢字" "汉字")))
+        (should (null options))))
+    ;; Every entry has the (NAME STATES RESET OPTIONS) shape.
+    (dolist (sw switches)
+      (should (= (length sw) 4)))))
+
+(ert-deftest liberime-test-get-switches-explicit-schema ()
+  "An explicit SCHEMA argument is honored."
+  (liberime-test--skip-unless-rime)
+  (let ((switches (liberime-get-switches "luna_pinyin")))
+    (should (cl-find "simplification" switches
+                     :key #'car :test #'equal))))
+
+(ert-deftest liberime-test-get-switches-unknown-schema-yields-nil ()
+  "A schema without a config (unknown id) yields nil, no error."
+  (liberime-test--skip-unless-rime)
+  (should (eq (liberime-get-switches "no_such_schema_xyz") nil)))
+
+;; ---------------------------------------------------------------------------
+;; Interactive option switcher tests
+;; ---------------------------------------------------------------------------
+
+(ert-deftest liberime-test-option-menu-is-command ()
+  "liberime-option-menu is an interactive command."
+  (should (commandp 'liberime-option-menu)))
+
+(ert-deftest liberime-test-option-menu-labels-live ()
+  "Candidates are the schema's own switches with schema labels."
+  (liberime-test--skip-unless-rime)
+  (let ((candidates
+         (catch 'coll
+           (cl-letf (((symbol-function 'completing-read)
+                      (lambda (_p collection &rest _)
+                        (throw 'coll collection))))
+             (liberime-option-menu)
+             nil))))
+    ;; simplification has schema labels (漢字/汉字 under luna_pinyin)
+    (should (cl-some (lambda (c)
+                       (and (string-prefix-p "simplification " (car c))
+                            (not (string-match-p "off -> on\\|on -> off"
+                                                 (car c)))))
+                     candidates))
+    ;; Options without a switch in the schema are not offered at all.
+    (should-not (cl-some (lambda (c)
+                           (string-prefix-p "extended_charset" (car c)))
+                         candidates))
+    ;; one candidate per schema-defined switch
+    (should (= (length candidates)
+               (length (liberime-get-switches))))))
+
+(ert-deftest liberime-test-option-menu-toggles ()
+  "Selecting an option flips it via set-option and echoes the transition."
+  (liberime-test--skip-unless-rime)
+  (liberime-test--save-option "simplification")
+  (unwind-protect
+      (progn
+        (liberime-set-option "simplification" nil)
+        (let ((echoed nil))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_p collection &rest _)
+                       (car (cl-find "simplification" collection
+                                     :key #'car :test #'string-prefix-p))))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (setq echoed (apply #'format fmt args)))))
+            (liberime-option-menu))
+          (should (eq (liberime-get-option "simplification") t))
+          (should (string-prefix-p "simplification " echoed))))
+    (liberime-test--restore-options)))
 
 ;; ---------------------------------------------------------------------------
 ;; Run tests
